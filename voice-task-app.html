@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>音声タスク化</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root {
+    --bg: #F7F2E9;
+    --bg-panel: #FFFFFF;
+    --ink: #2B2420;
+    --ink-soft: #77695C;
+    --ink-faint: #B8AA98;
+    --line: #E4D9C8;
+    --accent: #C9702E;
+    --accent-soft: #F1DFC9;
+    --done: #7C9A6E;
+    --progress: #C99A3A;
+    --danger: #B4553F;
+    --future: #6E8FA8;
+    --radius: 10px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #211C17; --bg-panel: #2B241D; --ink: #F1E9DD; --ink-soft: #B8AA98; --ink-faint: #6E6252;
+      --line: #443A2E; --accent: #E28A46; --accent-soft: #3A2E20; --done: #8FB37E; --progress: #DDB158;
+      --danger: #D6725A; --future: #8FB6D6;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #211C17; --bg-panel: #2B241D; --ink: #F1E9DD; --ink-soft: #B8AA98; --ink-faint: #6E6252;
+    --line: #443A2E; --accent: #E28A46; --accent-soft: #3A2E20; --done: #8FB37E; --progress: #DDB158;
+    --danger: #D6725A; --future: #8FB6D6;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-sans); height: 100%; }
+  .app { max-width: 640px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+  header {
+    padding: 20px 16px 14px; border-bottom: 1px solid var(--line); flex-shrink: 0;
+    position: sticky; top: env(safe-area-inset-top, 0px); background: var(--bg); z-index: 5;
+  }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: 0.01em; }
+  .sub { font-size: 13px; color: var(--ink-soft); margin: 0; line-height: 1.6; }
+
+  main { flex: 1; padding: 16px 16px 24px; width: 100%; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; }
+  textarea, .text-input {
+    width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+    font-size: 15px; line-height: 1.6; font-family: inherit; color: var(--ink); background: var(--bg);
+  }
+  textarea { min-height: 110px; resize: vertical; }
+  .text-input { padding: 10px 12px; font-size: 14px; }
+  textarea:focus, .text-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  button, select { font-family: inherit; font-size: 14px; border: none; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
+  .btn-main { background: var(--accent); color: #fff; font-weight: 600; flex: 1; }
+  .btn-main:disabled { opacity: 0.5; cursor: default; }
+  .btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+  .btn-ghost:disabled { opacity: 0.45; cursor: default; }
+  .mic-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; }
+  .mic-btn .dot { width: 9px; height: 9px; border-radius: 999px; background: var(--danger); flex-shrink: 0; }
+  .mic-btn.recording { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .mic-btn.recording .dot { background: #fff; }
+  .status-line { font-size: 13px; color: var(--ink-soft); min-height: 18px; margin-top: 8px; }
+  .status-line.err { color: var(--danger); }
+
+  details.manager { margin-bottom: 16px; }
+  details.manager > summary { font-size: 13.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; padding: 6px 2px; list-style: none; }
+  details.manager > summary::-webkit-details-marker { display: none; }
+  details.manager > summary::before { content: "▸ "; color: var(--accent); }
+  details.manager[open] > summary::before { content: "▾ "; }
+  .genre-manage-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .genre-manage-row:last-child { border-bottom: none; }
+  .genre-manage-note { font-size: 11px; color: var(--ink-faint); }
+
+  .genre-group { margin-bottom: 18px; }
+  .genre-title { font-size: 13px; font-weight: 700; color: var(--accent); margin: 0 0 8px; padding-left: 2px; }
+  .task {
+    display: flex; flex-direction: column; gap: 8px; background: var(--bg-panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px;
+  }
+  .task-main { display: flex; align-items: flex-start; gap: 8px; }
+  .task-title { flex: 1; font-size: 14.5px; line-height: 1.5; }
+  .task.done .task-title { color: var(--ink-soft); text-decoration: line-through; }
+  .task-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .genre-select {
+    font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--bg); color: var(--ink-soft);
+  }
+  .due-input { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999px; flex: 0 0 auto; }
+  .bell-btn {
+    width: 30px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); border-radius: 999px; flex-shrink: 0;
+  }
+  .bell-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .bell-btn:disabled { opacity: 0.4; cursor: default; }
+  .status-pill {
+    font-size: 12px; border-radius: 999px; padding: 4px 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink-soft); white-space: nowrap; cursor: pointer; flex-shrink: 0;
+  }
+  .status-pill.in_progress { color: #fff; background: var(--progress); border-color: var(--progress); }
+  .status-pill.done { color: #fff; background: var(--done); border-color: var(--done); }
+  .del-btn { background: none; border: none; color: var(--ink-soft); font-size: 16px; padding: 2px 4px; line-height: 1; cursor: pointer; flex-shrink: 0; }
+  .empty { text-align: center; color: var(--ink-soft); font-size: 13.5px; padding: 24px 0; }
+  .banner {
+    font-size: 12.5px; color: var(--ink-soft); background: var(--accent-soft); border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 16px; line-height: 1.6;
+  }
+
+  .seg-control { display: flex; gap: 6px; margin-bottom: 16px; }
+  .seg-btn {
+    flex: 1; background: var(--bg-panel); border: 1px solid var(--line); color: var(--ink-soft);
+    font-size: 13px; font-weight: 600; padding: 8px 0; border-radius: 8px;
+  }
+  .seg-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .seg-view { display: none; }
+  .seg-view.active { display: block; }
+
+  .proj-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+  .proj-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .proj-name { font-size: 14.5px; font-weight: 700; }
+  .proj-pct { font-size: 13px; font-weight: 700; }
+  .proj-bar-track { height: 6px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; margin-bottom: 8px; }
+  .proj-bar-fill { height: 100%; border-radius: 999px; }
+  .proj-count { font-size: 12px; color: var(--ink-soft); }
+
+  .sched-row {
+    display: flex; align-items: center; gap: 10px; background: var(--bg-panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 6px;
+  }
+  .sched-date { font-size: 12.5px; font-weight: 700; color: var(--accent); flex-shrink: 0; min-width: 56px; }
+  .sched-title { flex: 1; font-size: 14px; }
+  .sched-row.done .sched-title { color: var(--ink-soft); text-decoration: line-through; }
+
+  .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .cal-nav-btn { background: var(--bg-panel); border: 1px solid var(--line); color: var(--ink-soft); width: 34px; height: 34px; border-radius: 8px; padding: 0; font-size: 16px; }
+  .cal-month-label { font-size: 15px; font-weight: 700; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 18px; }
+  .cal-dow { text-align: center; font-size: 11px; color: var(--ink-faint); padding: 4px 0; }
+  .cal-cell {
+    position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; color: var(--ink); padding: 0;
+  }
+  .cal-cell.today { border-color: var(--accent); font-weight: 700; }
+  .cal-cell.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .cal-dot { position: absolute; bottom: 5px; width: 5px; height: 5px; border-radius: 999px; background: var(--accent); }
+  .cal-cell.selected .cal-dot { background: #fff; }
+  .cal-list-heading { font-size: 13px; font-weight: 700; color: var(--accent); margin: 4px 0 8px; }
+
+  nav.tabbar {
+    flex-shrink: 0; display: flex; border-top: 1px solid var(--line); background: var(--bg-panel);
+    position: sticky; bottom: 0; padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .tab-btn {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 0 10px;
+    background: none; border: none; color: var(--ink-faint); font-family: inherit; cursor: pointer;
+  }
+  .tab-btn svg { display: block; }
+  .tab-btn .tab-label { font-size: 10.5px; font-weight: 400; }
+  .tab-btn.active { color: var(--accent); }
+  .tab-btn.active .tab-label { font-weight: 700; }
+  .tab-btn:disabled { cursor: default; opacity: 0.55; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1 id="header-title">タスク</h1>
+    <p class="sub" id="header-sub">録音ボタンまたはキーボードのマイクボタンで話しかけて入力 → 「タスク化する」でジャンル分け・登録。PCとスマホで同じリストを共有します。</p>
+  </header>
+
+  <main>
+    <div id="banner-area"></div>
+
+    <div id="view-tasks" class="view active">
+      <details class="manager">
+        <summary>ジャンルを管理</summary>
+        <div class="card" style="margin-top:8px;">
+          <div id="genre-list"></div>
+          <div class="row">
+            <input id="new-genre-input" class="text-input" type="text" placeholder="新しいジャンル名">
+            <button id="add-genre-btn" class="btn-main" style="flex: 0 0 auto;">追加</button>
+          </div>
+        </div>
+      </details>
+
+      <div class="card">
+        <div class="row" style="margin-top:0;">
+          <button id="mic-btn" class="btn-ghost mic-btn"><span class="dot"></span><span id="mic-label">録音開始</span></button>
+        </div>
+        <textarea id="input" placeholder="ここに話した内容が入ります（上のボタンで録音、または入力欄をタップしてキーボードのマイクボタンでもOK）" style="margin-top:10px;"></textarea>
+        <div class="row">
+          <button id="parse-btn" class="btn-main">タスク化する</button>
+          <button id="clear-btn" class="btn-ghost">クリア</button>
+        </div>
+        <div id="status-line" class="status-line"></div>
+      </div>
+      <div class="row" style="margin: 0 0 12px;">
+        <button id="export-btn" class="btn-ghost" style="flex:1;">CSVで書き出す（スプレッドシート用）</button>
+      </div>
+      <div id="task-area"></div>
+    </div>
+
+    <div id="view-progress" class="view">
+      <div class="seg-control">
+        <button class="seg-btn active" data-seg="genre">ジャンル</button>
+        <button class="seg-btn" data-seg="timeframe">時間軸</button>
+      </div>
+      <div id="progress-genre" class="seg-view active"></div>
+      <div id="progress-timeframe" class="seg-view"></div>
+    </div>
+
+    <div id="view-calendar" class="view">
+      <div class="cal-header">
+        <button id="cal-prev" class="cal-nav-btn">‹</button>
+        <div id="cal-month-label" class="cal-month-label"></div>
+        <button id="cal-next" class="cal-nav-btn">›</button>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <div id="cal-day-list"></div>
+    </div>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab-btn" disabled title="準備中">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg>
+      <span class="tab-label">ホーム</span>
+    </button>
+    <button class="tab-btn active" data-tab="tasks">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 12l3 3 5-6"/></svg>
+      <span class="tab-label">タスク</span>
+    </button>
+    <button class="tab-btn" data-tab="progress">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-6"/></svg>
+      <span class="tab-label">進捗</span>
+    </button>
+    <button class="tab-btn" data-tab="calendar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg>
+      <span class="tab-label">カレンダー</span>
+    </button>
+    <button class="tab-btn" disabled title="準備中">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H8l-4 4V5z"/></svg>
+      <span class="tab-label">AIチーム</span>
+    </button>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const DEFAULT_GENRES = ["iクラブ", "TAG企画", "KSN", "MMクラブ", "うぇるま", "保育園", "税務・経理", "生活", "コンディショニング", "その他"];
+  let GENRES = [...DEFAULT_GENRES];
+  const TIMEFRAMES = ["将来", "近日中", "緊急", "保留"];
+  const TF_CYCLE = ["", ...TIMEFRAMES];
+  const TIMEFRAME_COLOR = { "将来": "var(--future)", "近日中": "var(--progress)", "緊急": "var(--danger)", "保留": "var(--ink-faint)", "未設定": "var(--ink-faint)" };
+  const STATUS_CYCLE = ["not_started", "in_progress", "done"];
+  const STATUS_LABEL = { not_started: "未着手", in_progress: "進行中", done: "完了" };
+  const HEADER = {
+    tasks: { title: "タスク", sub: "録音ボタンまたはキーボードのマイクボタンで話しかけて入力 → 「タスク化する」でジャンル分け・登録。PCとスマホで同じリストを共有します。" },
+    progress: { title: "プロジェクト進捗", sub: "ジャンル・時間軸を切り替えて確認できます。" },
+    calendar: { title: "カレンダー", sub: "期日を設定したタスクを月ごとに確認できます。" },
+  };
+
+  const $input = document.getElementById("input");
+  const $parseBtn = document.getElementById("parse-btn");
+  const $clearBtn = document.getElementById("clear-btn");
+  const $exportBtn = document.getElementById("export-btn");
+  const $micBtn = document.getElementById("mic-btn");
+  const $micLabel = document.getElementById("mic-label");
+  const $statusLine = document.getElementById("status-line");
+  const $taskArea = document.getElementById("task-area");
+  const $bannerArea = document.getElementById("banner-area");
+  const $headerTitle = document.getElementById("header-title");
+  const $headerSub = document.getElementById("header-sub");
+  const $tabBtns = document.querySelectorAll(".tab-btn[data-tab]");
+  const $genreList = document.getElementById("genre-list");
+  const $newGenreInput = document.getElementById("new-genre-input");
+  const $addGenreBtn = document.getElementById("add-genre-btn");
+  const $segBtns = document.querySelectorAll(".seg-btn");
+  const $segViews = { genre: document.getElementById("progress-genre"), timeframe: document.getElementById("progress-timeframe") };
+  const VIEWS = {
+    tasks: document.getElementById("view-tasks"),
+    progress: document.getElementById("view-progress"),
+    calendar: document.getElementById("view-calendar"),
+  };
+  const $calGrid = document.getElementById("cal-grid");
+  const $calMonthLabel = document.getElementById("cal-month-label");
+  const $calDayList = document.getElementById("cal-day-list");
+  const $calPrev = document.getElementById("cal-prev");
+  const $calNext = document.getElementById("cal-next");
+
+  let db = null;
+  let sample = null;
+  let downloadsCap = null;
+  let tasksCol = null;
+  let genresDocRef = null;
+  let localTasks = [];
+  let usingLocalFallback = false;
+  let latestTasks = [];
+  const scheduledTimers = {};
+  let calendarMonth = new Date();
+  calendarMonth.setDate(1);
+  calendarMonth.setHours(0, 0, 0, 0);
+  let selectedDateKey = null;
+
+  function setStatus(msg, isErr) {
+    $statusLine.textContent = msg || "";
+    $statusLine.classList.toggle("err", !!isErr);
+  }
+
+  function banner(text) {
+    const div = document.createElement("div");
+    div.className = "banner";
+    div.textContent = text;
+    $bannerArea.appendChild(div);
+  }
+
+  function switchTab(tab) {
+    Object.entries(VIEWS).forEach(([k, el]) => el.classList.toggle("active", k === tab));
+    $tabBtns.forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    $headerTitle.textContent = HEADER[tab].title;
+    $headerSub.textContent = HEADER[tab].sub;
+    if (tab === "calendar") renderCalendar(latestTasks);
+  }
+  $tabBtns.forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+  $segBtns.forEach(b => b.addEventListener("click", () => {
+    $segBtns.forEach(x => x.classList.toggle("active", x === b));
+    Object.entries($segViews).forEach(([k, el]) => el.classList.toggle("active", k === b.dataset.seg));
+  }));
+
+  // ---- ジャンル管理 ----
+  function ensureOther(list) {
+    const cleaned = list.filter(g => typeof g === "string" && g.trim()).map(g => g.trim());
+    if (!cleaned.includes("その他")) cleaned.push("その他");
+    return cleaned;
+  }
+
+  function renderGenreManager() {
+    $genreList.innerHTML = "";
+    GENRES.forEach(g => {
+      const row = document.createElement("div");
+      row.className = "genre-manage-row";
+      const label = document.createElement("div");
+      label.textContent = g;
+      label.style.flex = "1";
+      row.appendChild(label);
+
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.gap = "4px";
+      actions.style.alignItems = "center";
+
+      if (g === "その他") {
+        const note = document.createElement("span");
+        note.className = "genre-manage-note";
+        note.textContent = "既定（変更不可）";
+        actions.appendChild(note);
+      } else {
+        const editBtn = document.createElement("button");
+        editBtn.className = "del-btn";
+        editBtn.textContent = "✎";
+        editBtn.title = "名前を変更";
+        editBtn.onclick = () => startEditGenre(row, label, g);
+        actions.appendChild(editBtn);
+
+        const del = document.createElement("button");
+        del.className = "del-btn";
+        del.textContent = "×";
+        del.title = "このジャンルを削除";
+        del.onclick = () => deleteGenre(g);
+        actions.appendChild(del);
+      }
+      row.appendChild(actions);
+      $genreList.appendChild(row);
+    });
+  }
+
+  function startEditGenre(row, labelEl, oldName) {
+    let committed = false;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "text-input";
+    input.style.flex = "1";
+    input.style.padding = "4px 8px";
+    input.style.fontSize = "14px";
+    input.value = oldName;
+    row.replaceChild(input, labelEl);
+    input.focus();
+    input.select();
+    const commit = () => {
+      if (committed) return;
+      committed = true;
+      renameGenre(oldName, input.value);
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commit(); }
+      if (e.key === "Escape") { committed = true; renderGenreManager(); }
+    });
+    input.addEventListener("blur", commit);
+  }
+
+  function renameGenre(oldName, rawNewName) {
+    const newName = (rawNewName || "").trim();
+    if (oldName === "その他") return;
+    if (!newName || newName === oldName) { renderGenreManager(); return; }
+    if (GENRES.includes(newName)) { setStatus("その名前のジャンルは既にあります", true); renderGenreManager(); return; }
+    GENRES = ensureOther(GENRES.map(g => (g === oldName ? newName : g)));
+    if (!usingLocalFallback && genresDocRef) genresDocRef.set({ list: GENRES }).catch(() => {});
+    const affected = latestTasks.filter(t => t.genre === oldName);
+    if (usingLocalFallback) {
+      affected.forEach(t => { t.genre = newName; });
+    } else {
+      affected.forEach(t => tasksCol.doc(t.id).update({ genre: newName }).catch(() => {}));
+    }
+    renderGenreManager();
+    renderAll(latestTasks);
+    setStatus(`ジャンル名を「${oldName}」→「${newName}」に変更しました`);
+  }
+
+  function applyGenres(updated) {
+    GENRES = ensureOther(updated);
+    if (!usingLocalFallback && genresDocRef) genresDocRef.set({ list: GENRES }).catch(() => {});
+    renderGenreManager();
+    renderAll(latestTasks);
+  }
+
+  function addGenre(rawName) {
+    const name = (rawName || "").trim();
+    if (!name) return;
+    if (GENRES.includes(name)) { setStatus("そのジャンルは既にあります", true); return; }
+    const others = GENRES.filter(g => g !== "その他");
+    applyGenres([...others, name, "その他"]);
+    setStatus(`ジャンル「${name}」を追加しました`);
+  }
+
+  function deleteGenre(name) {
+    if (name === "その他") return;
+    applyGenres(GENRES.filter(g => g !== name));
+    setStatus(`ジャンル「${name}」を削除しました（該当タスクは「その他」に表示されます）`);
+  }
+
+  $addGenreBtn.addEventListener("click", () => { addGenre($newGenreInput.value); $newGenreInput.value = ""; });
+  $newGenreInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); addGenre($newGenreInput.value); $newGenreInput.value = ""; }
+  });
+
+  function groupByGenre(tasks) {
+    const byGenre = {};
+    for (const t of tasks) {
+      const g = GENRES.includes(t.genre) ? t.genre : "その他";
+      (byGenre[g] = byGenre[g] || []).push(t);
+    }
+    return byGenre;
+  }
+
+  function groupByTimeframe(tasks) {
+    const by = {};
+    for (const t of tasks) {
+      const tf = TIMEFRAMES.includes(t.timeframe) ? t.timeframe : "未設定";
+      (by[tf] = by[tf] || []).push(t);
+    }
+    return by;
+  }
+
+  function genreSelectHtml(current) {
+    return GENRES.map(g => `<option value="${g}"${g === current ? " selected" : ""}>${g}</option>`).join("");
+  }
+
+  function nextTimeframe(current) {
+    const idx = TF_CYCLE.indexOf(TIMEFRAMES.includes(current) ? current : "");
+    return TF_CYCLE[(idx + 1) % TF_CYCLE.length];
+  }
+
+  function timeframePillStyle(key) {
+    if (key === "未設定") return { bg: "var(--bg)", fg: "var(--ink-soft)", border: "var(--line)" };
+    const c = TIMEFRAME_COLOR[key] || "var(--accent)";
+    return { bg: c, fg: "#fff", border: c };
+  }
+
+  function bellSvg(on) {
+    if (on) return '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a6 6 0 0 0-6 6v3.586l-1.707 1.707A1 1 0 0 0 5 15h14a1 1 0 0 0 .707-1.707L18 11.586V8a6 6 0 0 0-6-6z"/><path d="M9 18a3 3 0 0 0 6 0H9z"/></svg>';
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a5 5 0 0 0-5 5v3.5L5.3 14.2A1 1 0 0 0 6 16h12a1 1 0 0 0 .7-1.8L17 11.5V8a5 5 0 0 0-5-5z"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg>';
+  }
+
+  function toLocalInputValue(ms) {
+    if (!ms) return "";
+    const d = new Date(ms);
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function dateKey(d) {
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+
+  function renderTasks(tasks) {
+    $taskArea.innerHTML = "";
+    if (!tasks.length) {
+      $taskArea.innerHTML = '<div class="empty">まだタスクがありません。上の欄に話した内容を入力してみてください。</div>';
+      return;
+    }
+    const byGenre = groupByGenre(tasks);
+    for (const g of GENRES) {
+      const list = byGenre[g];
+      if (!list || !list.length) continue;
+      const group = document.createElement("div");
+      group.className = "genre-group";
+      const title = document.createElement("p");
+      title.className = "genre-title";
+      title.textContent = `${g}（${list.length}）`;
+      group.appendChild(title);
+      for (const t of list) group.appendChild(renderTaskRow(t));
+      $taskArea.appendChild(group);
+    }
+  }
+
+  function renderTaskRow(t) {
+    const currentGenre = GENRES.includes(t.genre) ? t.genre : "その他";
+    const tfKey = TIMEFRAMES.includes(t.timeframe) ? t.timeframe : "未設定";
+    const row = document.createElement("div");
+    row.className = "task" + (t.status === "done" ? " done" : "");
+
+    const main = document.createElement("div");
+    main.className = "task-main";
+    const title = document.createElement("div");
+    title.className = "task-title";
+    title.textContent = t.title;
+    const del = document.createElement("button");
+    del.className = "del-btn";
+    del.textContent = "×";
+    del.title = "削除";
+    del.onclick = () => deleteTask(t);
+    main.appendChild(title);
+    main.appendChild(del);
+
+    const meta1 = document.createElement("div");
+    meta1.className = "task-meta";
+    const genreSelect = document.createElement("select");
+    genreSelect.className = "genre-select";
+    genreSelect.innerHTML = genreSelectHtml(currentGenre);
+    genreSelect.onchange = () => changeGenre(t, genreSelect.value);
+
+    const tfBtn = document.createElement("button");
+    tfBtn.className = "status-pill";
+    tfBtn.textContent = tfKey;
+    const tfStyle = timeframePillStyle(tfKey);
+    tfBtn.style.background = tfStyle.bg;
+    tfBtn.style.color = tfStyle.fg;
+    tfBtn.style.borderColor = tfStyle.border;
+    tfBtn.onclick = () => setTaskField(t, "timeframe", nextTimeframe(t.timeframe));
+
+    const pill = document.createElement("button");
+    pill.className = "status-pill " + t.status;
+    pill.textContent = STATUS_LABEL[t.status] || STATUS_LABEL.not_started;
+    pill.onclick = () => cycleStatus(t);
+
+    meta1.appendChild(genreSelect);
+    meta1.appendChild(tfBtn);
+    meta1.appendChild(pill);
+
+    const meta2 = document.createElement("div");
+    meta2.className = "task-meta";
+    const dueInput = document.createElement("input");
+    dueInput.type = "datetime-local";
+    dueInput.className = "text-input due-input";
+    dueInput.value = toLocalInputValue(t.dueAt);
+    dueInput.onchange = () => changeDueDate(t, dueInput.value);
+    const bellBtn = document.createElement("button");
+    bellBtn.className = "bell-btn" + (t.reminderScheduled ? " on" : "");
+    bellBtn.disabled = !t.dueAt;
+    bellBtn.innerHTML = bellSvg(!!t.reminderScheduled);
+    bellBtn.title = t.dueAt ? (t.reminderScheduled ? "リマインドを解除" : "この日時にリマインドする") : "先に期日を設定してください";
+    bellBtn.onclick = () => toggleReminder(t);
+    meta2.appendChild(dueInput);
+    meta2.appendChild(bellBtn);
+
+    row.appendChild(main);
+    row.appendChild(meta1);
+    row.appendChild(meta2);
+    return row;
+  }
+
+  function pctColor(pct) {
+    if (pct >= 100) return "var(--done)";
+    if (pct >= 50) return "var(--accent)";
+    return "var(--progress)";
+  }
+
+  function progressCardEl(label, count, total, color) {
+    const pct = Math.round((count / total) * 100);
+    const card = document.createElement("div");
+    card.className = "proj-card";
+    card.innerHTML = `
+      <div class="proj-top"><div class="proj-name"></div><div class="proj-pct" style="color:${color}">${pct}%</div></div>
+      <div class="proj-bar-track"><div class="proj-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="proj-count">${count}/${total}件完了</div>
+    `;
+    card.querySelector(".proj-name").textContent = label;
+    return card;
+  }
+
+  function renderProgressByGenre(tasks) {
+    const $el = $segViews.genre;
+    $el.innerHTML = "";
+    if (!tasks.length) { $el.innerHTML = '<div class="empty">タスクを登録すると、ここにジャンルごとの進捗が表示されます。</div>'; return; }
+    const byGenre = groupByGenre(tasks);
+    for (const g of GENRES.filter(g => byGenre[g] && byGenre[g].length)) {
+      const list = byGenre[g];
+      const doneCount = list.filter(t => t.status === "done").length;
+      $el.appendChild(progressCardEl(g, doneCount, list.length, pctColor(Math.round((doneCount / list.length) * 100))));
+    }
+  }
+
+  function renderProgressByTimeframe(tasks) {
+    const $el = $segViews.timeframe;
+    $el.innerHTML = "";
+    if (!tasks.length) { $el.innerHTML = '<div class="empty">タスクを登録すると、ここに時間軸ごとの進捗が表示されます。</div>'; return; }
+    const by = groupByTimeframe(tasks);
+    const order = [...TIMEFRAMES, "未設定"].filter(k => by[k] && by[k].length);
+    for (const k of order) {
+      const list = by[k];
+      const doneCount = list.filter(t => t.status === "done").length;
+      $el.appendChild(progressCardEl(k, doneCount, list.length, TIMEFRAME_COLOR[k] || "var(--accent)"));
+    }
+  }
+
+  function renderCalendar(tasks) {
+    const y = calendarMonth.getFullYear(), m = calendarMonth.getMonth();
+    $calMonthLabel.textContent = `${y}年${m + 1}月`;
+
+    const byDay = {};
+    for (const t of tasks.filter(t => t.dueAt)) {
+      const key = dateKey(new Date(t.dueAt));
+      (byDay[key] = byDay[key] || []).push(t);
+    }
+
+    $calGrid.innerHTML = "";
+    ["日", "月", "火", "水", "木", "金", "土"].forEach(w => {
+      const el = document.createElement("div");
+      el.className = "cal-dow";
+      el.textContent = w;
+      $calGrid.appendChild(el);
+    });
+    const firstDow = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const todayKey = dateKey(new Date());
+    for (let i = 0; i < firstDow; i++) $calGrid.appendChild(document.createElement("div"));
+    for (let day = 1; day <= daysInMonth; day++) {
+      const key = dateKey(new Date(y, m, day));
+      const count = byDay[key] ? byDay[key].length : 0;
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "cal-cell" + (key === todayKey ? " today" : "") + (key === selectedDateKey ? " selected" : "");
+      cell.innerHTML = `<span>${day}</span>` + (count ? '<span class="cal-dot"></span>' : "");
+      cell.onclick = () => { selectedDateKey = key; renderCalendar(latestTasks); };
+      $calGrid.appendChild(cell);
+    }
+
+    $calDayList.innerHTML = "";
+    if (!selectedDateKey) {
+      $calDayList.innerHTML = '<div class="empty">日付を選ぶと、その日の予定が表示されます（点が付いている日に予定があります）。</div>';
+      return;
+    }
+    const [yy, mm, dd] = selectedDateKey.split("-").map(Number);
+    const heading = document.createElement("div");
+    heading.className = "cal-list-heading";
+    const list = (byDay[selectedDateKey] || []).sort((a, b) => a.dueAt - b.dueAt);
+    heading.textContent = `${mm}月${dd}日の予定（${list.length}件）`;
+    $calDayList.appendChild(heading);
+    if (!list.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "この日の予定はありません。";
+      $calDayList.appendChild(empty);
+      return;
+    }
+    list.forEach(t => {
+      const row = document.createElement("div");
+      row.className = "sched-row" + (t.status === "done" ? " done" : "");
+      const timeEl = document.createElement("div");
+      timeEl.className = "sched-date";
+      timeEl.textContent = new Date(t.dueAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+      const titleEl = document.createElement("div");
+      titleEl.className = "sched-title";
+      titleEl.textContent = t.title;
+      const bell = document.createElement("button");
+      bell.className = "bell-btn" + (t.reminderScheduled ? " on" : "");
+      bell.innerHTML = bellSvg(!!t.reminderScheduled);
+      bell.title = t.reminderScheduled ? "リマインドを解除" : "この日時にリマインドする";
+      bell.onclick = () => toggleReminder(t);
+      row.appendChild(timeEl);
+      row.appendChild(titleEl);
+      row.appendChild(bell);
+      $calDayList.appendChild(row);
+    });
+  }
+
+  $calPrev.addEventListener("click", () => { calendarMonth.setMonth(calendarMonth.getMonth() - 1); renderCalendar(latestTasks); });
+  $calNext.addEventListener("click", () => { calendarMonth.setMonth(calendarMonth.getMonth() + 1); renderCalendar(latestTasks); });
+
+  function renderAll(tasks) {
+    latestTasks = tasks;
+    renderTasks(tasks);
+    renderProgressByGenre(tasks);
+    renderProgressByTimeframe(tasks);
+    renderCalendar(tasks);
+    reconcileReminders(tasks);
+  }
+
+  function setTaskField(t, field, value) {
+    if (usingLocalFallback) { t[field] = value; renderAll(localTasks); }
+    else tasksCol.doc(t.id).update({ [field]: value }).catch(() => {});
+  }
+
+  function cycleStatus(t) {
+    const idx = STATUS_CYCLE.indexOf(t.status);
+    setTaskField(t, "status", STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]);
+  }
+
+  function changeGenre(t, newGenre) { setTaskField(t, "genre", newGenre); }
+
+  function changeDueDate(t, value) {
+    const ms = value ? new Date(value).getTime() : null;
+    if (scheduledTimers[t.id]) { clearTimeout(scheduledTimers[t.id]); delete scheduledTimers[t.id]; }
+    if (usingLocalFallback) { t.dueAt = ms; t.reminderScheduled = false; renderAll(localTasks); }
+    else tasksCol.doc(t.id).update({ dueAt: ms, reminderScheduled: false }).catch(() => {});
+  }
+
+  function deleteTask(t) {
+    if (scheduledTimers[t.id]) { clearTimeout(scheduledTimers[t.id]); delete scheduledTimers[t.id]; }
+    if (usingLocalFallback) { localTasks = localTasks.filter(x => x.id !== t.id); renderAll(localTasks); }
+    else tasksCol.doc(t.id).delete().catch(() => {});
+  }
+
+  async function addTasks(items) {
+    if (usingLocalFallback) {
+      for (const it of items) {
+        localTasks.push({ id: "local-" + Math.random().toString(36).slice(2), title: it.title, genre: it.genre, status: "not_started", createdAt: Date.now() });
+      }
+      renderAll(localTasks);
+      return;
+    }
+    for (const it of items) {
+      await tasksCol.add({ title: it.title, genre: it.genre, status: "not_started", createdAt: Date.now() });
+    }
+  }
+
+  function fallbackSplit(text) {
+    return text.split(/[\n。]/).map(s => s.trim()).filter(Boolean).map(s => ({ title: s, genre: "その他" }));
+  }
+
+  async function handleParse() {
+    const text = $input.value.trim();
+    if (!text) { setStatus("入力欄に内容を入れてください", true); return; }
+    $parseBtn.disabled = true;
+
+    if (!sample) {
+      setStatus("AI解析が使えないため、簡易分割で登録します…");
+      const items = fallbackSplit(text);
+      await addTasks(items);
+      $input.value = "";
+      setStatus(`${items.length}件のタスクを登録しました（簡易分割）`);
+      $parseBtn.disabled = false;
+      return;
+    }
+
+    setStatus("解析中…");
+    try {
+      const prompt =
+        "以下は音声入力で話した内容のブレインダンプです。実行可能なタスクの単位に分割し、" +
+        "各タスクに次のジャンルリストから最も適切な1つを割り当ててください（どれも合わなければ「その他」）。\n" +
+        "ジャンル一覧: " + GENRES.join("、") + "\n\n" +
+        "出力は必ず次の形式のJSON配列のみとしてください（説明文や前置きは不要）：\n" +
+        '[{"title": "タスクの内容（簡潔な体言止めまたは動詞で）", "genre": "ジャンル名"}]\n\n' +
+        "入力内容:\n" + text;
+
+      const items = await sample.json(prompt, { modelTier: "quick" });
+      if (!Array.isArray(items) || !items.length) {
+        setStatus("タスクを抽出できませんでした。内容を見直して再度お試しください。", true);
+        $parseBtn.disabled = false;
+        return;
+      }
+      const cleaned = items
+        .filter(it => it && typeof it.title === "string" && it.title.trim())
+        .map(it => ({ title: it.title.trim(), genre: GENRES.includes(it.genre) ? it.genre : "その他" }));
+      await addTasks(cleaned);
+      $input.value = "";
+      setStatus(`${cleaned.length}件のタスクを登録しました（ジャンルが違う場合は各タスクのプルダウンから変更できます）`);
+    } catch (e) {
+      const code = e && e.code;
+      if (code === "not_granted") {
+        setStatus("このアプリからのAI利用が許可されていません。簡易分割で登録します…");
+        const items = fallbackSplit(text);
+        await addTasks(items);
+        $input.value = "";
+        setStatus(`${items.length}件のタスクを登録しました（簡易分割）`);
+      } else if (code === "rate_limited") {
+        setStatus("少し混み合っています。時間をおいて再度お試しください。", true);
+      } else {
+        setStatus("解析に失敗しました（" + (code || "unknown") + "）。もう一度お試しください。", true);
+      }
+    } finally {
+      $parseBtn.disabled = false;
+    }
+  }
+
+  $parseBtn.addEventListener("click", handleParse);
+  $clearBtn.addEventListener("click", () => { $input.value = ""; setStatus(""); });
+
+  // ---- 録音（Web Speech API） ----
+  // GitHub Pages等、claude.aiの外にホストした場合はブラウザが通常どおりマイク許可ダイアログを出します。
+  // claude.aiのArtifactプレビュー内はサンドボックスの制約でマイク権限が得られず動作しないことがあります。
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isRecording = false;
+  let baseTextAtStart = "";
+  let finalizedSinceStart = "";
+
+  function joinText(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    return a + (/[\s\n]$/.test(a) ? "" : " ") + b;
+  }
+
+  function setupRecognition() {
+    recognition = new SR();
+    recognition.lang = "ja-JP";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const res = event.results[i];
+        if (res.isFinal) finalizedSinceStart = joinText(finalizedSinceStart, res[0].transcript.trim());
+        else interim += res[0].transcript;
+      }
+      $input.value = joinText(joinText(baseTextAtStart, finalizedSinceStart), interim);
+    };
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setStatus("マイクへのアクセスが許可されていません。端末・ブラウザの設定を確認するか、キーボードのマイクボタンをご利用ください。", true);
+        stopRecording();
+      } else if (event.error !== "no-speech") {
+        setStatus("音声認識でエラーが発生しました（" + event.error + "）", true);
+      }
+    };
+    recognition.onend = () => { if (isRecording) { try { recognition.start(); } catch (e) {} } };
+  }
+
+  function startRecording() {
+    if (!SR) return;
+    if (!recognition) setupRecognition();
+    baseTextAtStart = $input.value;
+    finalizedSinceStart = "";
+    isRecording = true;
+    $micBtn.classList.add("recording");
+    $micLabel.textContent = "録音停止";
+    setStatus("聞き取り中…");
+    try { recognition.start(); } catch (e) {}
+  }
+
+  function stopRecording() {
+    isRecording = false;
+    $micBtn.classList.remove("recording");
+    $micLabel.textContent = "録音開始";
+    if (recognition) { try { recognition.stop(); } catch (e) {} }
+    if ($statusLine.textContent === "聞き取り中…") setStatus("");
+  }
+
+  if (!SR) {
+    $micBtn.disabled = true;
+    $micBtn.title = "この端末・ブラウザは音声認識に対応していません。キーボードのマイクボタンをご利用ください（iPhoneのSafari/Chromeは非対応です）。";
+  } else {
+    $micBtn.addEventListener("click", () => { if (isRecording) stopRecording(); else startRecording(); });
+  }
+
+  // ---- リマインド（ブラウザ通知・ベストエフォート） ----
+  function scheduleTimer(t) {
+    const delay = t.dueAt - Date.now();
+    if (delay <= 0 || delay > 2147483647) return;
+    scheduledTimers[t.id] = setTimeout(() => {
+      try { new Notification("タスクのリマインド", { body: t.title }); } catch (e) {}
+      delete scheduledTimers[t.id];
+    }, delay);
+  }
+
+  function reconcileReminders(tasks) {
+    const now = Date.now();
+    for (const t of tasks) {
+      if (t.reminderScheduled && t.dueAt) {
+        if (t.dueAt <= now) setTaskField(t, "reminderScheduled", false);
+        else if (!scheduledTimers[t.id]) scheduleTimer(t);
+      }
+    }
+  }
+
+  async function toggleReminder(t) {
+    if (!t.dueAt) return;
+    if (t.reminderScheduled) {
+      if (scheduledTimers[t.id]) { clearTimeout(scheduledTimers[t.id]); delete scheduledTimers[t.id]; }
+      setTaskField(t, "reminderScheduled", false);
+      setStatus("リマインドを解除しました");
+      return;
+    }
+    if (typeof Notification === "undefined") {
+      setStatus("この端末・ブラウザは通知に対応していません（iPhoneのSafariは非対応です）。カレンダーには表示されるので、リマインドはご自身のカレンダー・リマインダーアプリをご利用ください。", true);
+      return;
+    }
+    let perm = Notification.permission;
+    if (perm === "default") perm = await Notification.requestPermission();
+    if (perm !== "granted") { setStatus("通知が許可されていません。端末の設定から通知を許可してください。", true); return; }
+    if (t.dueAt <= Date.now()) { setStatus("その日時はすでに過ぎています", true); return; }
+    scheduleTimer(t);
+    setTaskField(t, "reminderScheduled", true);
+    setStatus("リマインドを設定しました。このアプリ（タブ）を開いたままにしておくと通知します。閉じると通知されません。");
+  }
+
+  // ---- CSV書き出し ----
+  function csvEscape(v) {
+    const s = String(v == null ? "" : v);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  function formatDate(ts) {
+    if (!ts) return "";
+    try { return new Date(ts).toLocaleString("ja-JP"); } catch (e) { return ""; }
+  }
+
+  async function handleExport() {
+    if (!latestTasks.length) { setStatus("書き出せるタスクがありません", true); return; }
+    const header = ["タイトル", "ジャンル", "ステータス", "時間軸", "期日", "登録日時"];
+    const rows = latestTasks.map(t => [
+      t.title || "",
+      GENRES.includes(t.genre) ? t.genre : "その他",
+      STATUS_LABEL[t.status] || STATUS_LABEL.not_started,
+      TIMEFRAMES.includes(t.timeframe) ? t.timeframe : "",
+      t.dueAt ? formatDate(t.dueAt) : "",
+      formatDate(t.createdAt),
+    ]);
+    const csv = "\uFEFF" + [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
+    if (!downloadsCap) { setStatus("この環境ではファイル書き出しに対応していません", true); return; }
+    const y = new Date();
+    const filename = `tasks_${y.getFullYear()}${String(y.getMonth()+1).padStart(2,"0")}${String(y.getDate()).padStart(2,"0")}.csv`;
+    try {
+      await downloadsCap.save({ filename, data: csv });
+      setStatus("CSVを書き出しました。スプレッドシートアプリで開けます。");
+    } catch (e) {
+      const code = e && e.code;
+      if (code === "declined") { /* 何もしない */ }
+      else if (code === "rate_limited") setStatus("少し時間をおいて再度お試しください。", true);
+      else setStatus("書き出しに失敗しました（" + (code || "unknown") + "）", true);
+    }
+  }
+  $exportBtn.addEventListener("click", handleExport);
+
+  async function init() {
+    db = await window.claude?.use?.("db").catch(() => null) ?? null;
+    sample = await window.claude?.use?.("sample").catch(() => null) ?? null;
+    downloadsCap = await window.claude?.use?.("downloads").catch(() => null) ?? null;
+
+    renderGenreManager();
+
+    if (!db) {
+      usingLocalFallback = true;
+      banner("データ保存機能が利用できないため、この端末・このセッションのみのお試し表示になります（PC/スマホ間の共有はできません）。ジャンルの追加・削除もこのセッション内のみ有効です。");
+      renderAll(localTasks);
+    } else {
+      tasksCol = db.collection("tasks");
+      tasksCol.orderBy("createdAt", "desc").onSnapshot(
+        (snap) => { renderAll(snap.docs.map(d => ({ id: d.id, ...d.data() }))); },
+        () => {
+          usingLocalFallback = true;
+          banner("データの読み込みでエラーが発生しました。この端末のみの一時表示に切り替えます。");
+          renderAll(localTasks);
+        }
+      );
+
+      genresDocRef = db.doc("config/genres");
+      genresDocRef.onSnapshot(
+        (snap) => {
+          if (snap.exists && Array.isArray(snap.data().list) && snap.data().list.length) {
+            GENRES = ensureOther(snap.data().list);
+          } else {
+            GENRES = [...DEFAULT_GENRES];
+            genresDocRef.set({ list: GENRES }).catch(() => {});
+          }
+          renderGenreManager();
+          renderAll(latestTasks);
+        },
+        () => {}
+      );
+    }
+
+    if (!sample) banner("この環境ではAIによる自動ジャンル分けが使えません。登録時は簡易分割（改行・句点区切り）になります。");
+    if (typeof Notification === "undefined") banner("この端末・ブラウザは通知（リマインド）に対応していません。期日はカレンダー表示のみとなります。");
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
